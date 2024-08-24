@@ -1,12 +1,12 @@
 /**
  * Developer: Irving Alain Aguilar Pérez
  * Date: 2024-08-23
- * Script Name: us-01.js
+ * Script Name: bank-ocr.js
  * Script Summary: This script implements a functionality to parse from OCR to digit.
  */
 /* Libraries */
-const { reverse } = require('dns');
 const fs = require('fs');
+/* Globals */
 const MAX_CHARACTERS = 27;
 const MAX_LINES = 3;
 /* Helper Functions */
@@ -48,12 +48,19 @@ const parseOcrAccount = (text_file_lines) => {
     }
     return account;
 }
-
+/**
+ * @description Iterate the lines of a given OCR file and parse each of them to a digit format.
+ * @param {String} text_file_content 
+ * @returns {Array} accounts
+ */
 const parseOcrTextFile = (text_file_content) => {
+    // Separate OCR records by line break.
     const flat_lines = text_file_content.split('\n');
+    // Array to store the parsed accounts.
     const accounts = [];
-    for (let i = 0; i < flat_lines.length; i += 4) {
-        const current_account_lines = flat_lines.slice(i, i + 3);
+    // Iterate each OCR record and parse its content
+    for (let index = 0; index < flat_lines.length; index += 4) {
+        const current_account_lines = flat_lines.slice(index, index + 3);
         if (current_account_lines.length == 3) {
             const account = parseOcrAccount(current_account_lines);
             accounts.push(account);
@@ -61,16 +68,26 @@ const parseOcrTextFile = (text_file_content) => {
     }
     return accounts;
 }
-
+/**
+ * @description Validate the checksum for a given account.
+ * @param {String} account 
+ * @returns {Boolean} true or false.
+ */
 const validateCheckSum = (account) => {
+    // Split the account and reverse it
     let reversed = account.split('').reverse();
     let sum = 0;
     reversed.forEach((digit, index) => {
+        // Sum index + 1 so we can start from 1
         sum += (index + 1) * parseInt(digit);
     });
     return sum % 11 == 0;
 }
-
+/**
+ * @description Define the state of a bank account based on its content.
+ * @param {String} account 
+ * @returns {String} state
+ */
 const validateState = (account) => {
     let non_valid_pattern = /[?]/;
     // Case 1. Validate if the account has non-recognized characters.
@@ -95,5 +112,42 @@ fs.readFile(file_path, 'utf8', (err, file_content) => {
         return;
     }
     const bank_accounts = parseOcrTextFile(file_content);
-    bank_accounts.forEach(bank_account => console.log(validateState(bank_account)));
+    const output_file_path = 'output.txt';
+
+    // Open the output file
+    fs.open(output_file_path, 'a', (openErr, fd) => {
+        if (openErr) {
+            if (openErr.code === 'ENOENT') {
+                // If the file does not exist, then we create a new one
+                fs.writeFile(output_file_path, '', (createErr) => {
+                    if (createErr) {
+                        console.error('Error creating output file: ', createErr);
+                    } else {
+                        console.log('Output file created successfully!');
+                    }
+                });
+            } else {
+                console.error('Error opening output file: ', openErr);
+            }
+            return;
+        }
+
+        // Write bank accounts into file
+        bank_accounts.forEach(bank_account => {
+            try {
+                fs.writeSync(fd, validateState(bank_account) + '\n');
+            } catch (writeErr) {
+                console.error(writeErr);
+            }
+        });
+
+        // Close file after writing
+        fs.close(fd, (closeErr) => {
+            if (closeErr) {
+                console.error('Error closing output file: ', closeErr);
+            } else {
+                console.log(`File written successfully!: ${output_file_path}`);
+            }
+        });
+    });
 });
